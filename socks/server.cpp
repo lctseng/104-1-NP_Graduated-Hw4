@@ -13,6 +13,8 @@
 #define DEFAULT_PORT 18090
 #define MAX_BUF_SIZE 10240
 
+#define BIND_PORT_BASE 31234
+
 #include "socks.hpp"
 #include "lib.hpp"
 
@@ -30,6 +32,8 @@ fd_set rs;
 fd_set ws;
 fd_set rfds,wfds;
 char buf[MAX_BUF_SIZE];
+
+int bind_port_num = BIND_PORT_BASE;
 
 // return value: whether to close connection
 bool read_a_to_b(int from_fd,int to_fd){
@@ -204,6 +208,7 @@ int main(int argc,char** argv){
     else if(pid>0){
       // parent
       close(clientfd);
+      bind_port_num++;
     }
     else{
       // child
