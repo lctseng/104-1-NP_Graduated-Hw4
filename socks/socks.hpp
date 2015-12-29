@@ -50,7 +50,7 @@ struct socks4_data{
 
 
   socks4_data()
-    :vn(4),
+    :vn(0),
      user_id(""),
      cd(0),
      dst_port(0),
