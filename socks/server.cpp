@@ -83,69 +83,77 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
   in_addr_dst_ip.s_addr = socks_req.dst_ip;
   strncpy(dst_ip,inet_ntoa(in_addr_dst_ip),20);
   dst_port = ntohs(socks_req.dst_port);
-  cout << "[INFO] SOCKS Request " << (socks_req.cd == CD_CONNECT ? "[CONNECT]" : "[BIND]") 
-       << " [User ID] \"" << socks_req.user_id
-       << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
-       << dst_ip << ":" << dst_port << endl;
-  // connect to remote
-  // create socket and fill addr data
-  int remote_fd = socket(AF_INET,SOCK_STREAM,0);
-  memset(&remote_addr, 0, sizeof(remote_addr)); 
-  remote_addr.sin_family = AF_INET;
-  remote_addr.sin_addr.s_addr = socks_req.dst_ip;
-  remote_addr.sin_port = socks_req.dst_port;
-  // connect remote
-  if(connect(remote_fd,(struct sockaddr *)&remote_addr,sizeof(remote_addr)) == -1) {
-    err_abort("Sock Connect Error");
-  }
-  // reply to client: socks ready
-  socks4_data socks_rep = socks_req;
-  socks_rep.vn = 0x0;
-  socks_rep.cd = CD_GRANTED;
-  socks_rep.write_to_fd(client_fd);
-  cout << "[INFO] SOCKS Request granted " 
-       << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
-       << dst_ip << ":" << dst_port << endl;
-  // start ot relay
-  // using select
-  // init fds
-  nfds = std::max(client_fd,remote_fd) + 1;
-  FD_ZERO(&rs);
-  FD_ZERO(&ws);
-  FD_SET(client_fd,&rs);
-  FD_SET(client_fd,&ws);
-  FD_SET(remote_fd,&rs);
-  FD_SET(remote_fd,&ws);
-  
-  // select loop
-  while(true){
-    memcpy(&rfds,&rs,sizeof(rfds));
-    memcpy(&wfds,&ws,sizeof(wfds));
-    if((select(nfds,&rfds,&wfds,NULL,NULL))<0){
-      err_abort("Select Error!");
+  if (socks_req.cd == CD_CONNECT){
+    cout << "[INFO] SOCKS CONNECT Request" 
+         << " [User ID] \"" << socks_req.user_id
+         << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
+         << dst_ip << ":" << dst_port << endl;
+    // connect to remote
+    // create socket and fill addr data
+    int remote_fd = socket(AF_INET,SOCK_STREAM,0);
+    memset(&remote_addr, 0, sizeof(remote_addr)); 
+    remote_addr.sin_family = AF_INET;
+    remote_addr.sin_addr.s_addr = socks_req.dst_ip;
+    remote_addr.sin_port = socks_req.dst_port;
+    // connect remote
+    if(connect(remote_fd,(struct sockaddr *)&remote_addr,sizeof(remote_addr)) == -1) {
+      err_abort("Sock Connect Error");
     }
-    // client read
-    if(FD_ISSET(client_fd,&rfds)){
-      cout << "[INFO] Data from " 
-           << src_ip << ":" << src_port << " to " 
-           << dst_ip << ":" << dst_port << ", ";
-      if(!read_a_to_b(client_fd,remote_fd)){
-        cout << " client closed" << endl;
-        break;
+    // reply to client: socks ready
+    socks4_data socks_rep = socks_req;
+    socks_rep.vn = 0x0;
+    socks_rep.cd = CD_GRANTED;
+    socks_rep.write_to_fd(client_fd);
+    cout << "[INFO] SOCKS Request granted " 
+         << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+         << dst_ip << ":" << dst_port << endl;
+    // start ot relay
+    // using select
+    // init fds
+    nfds = std::max(client_fd,remote_fd) + 1;
+    FD_ZERO(&rs);
+    FD_ZERO(&ws);
+    FD_SET(client_fd,&rs);
+    FD_SET(client_fd,&ws);
+    FD_SET(remote_fd,&rs);
+    FD_SET(remote_fd,&ws);
+    
+    // select loop
+    while(true){
+      memcpy(&rfds,&rs,sizeof(rfds));
+      memcpy(&wfds,&ws,sizeof(wfds));
+      if((select(nfds,&rfds,&wfds,NULL,NULL))<0){
+        err_abort("Select Error!");
+      }
+      // client read
+      if(FD_ISSET(client_fd,&rfds)){
+        cout << "[INFO] Data from " 
+             << src_ip << ":" << src_port << " to " 
+             << dst_ip << ":" << dst_port << ", ";
+        if(!read_a_to_b(client_fd,remote_fd)){
+          cout << " client closed" << endl;
+          break;
+        }
+      }
+      // remote read
+      if(FD_ISSET(remote_fd,&rfds)){
+        cout << "[INFO] Data from " 
+             << dst_ip << ":" << dst_port << " to " 
+             << src_ip << ":" << src_port << ", ";
+        if(!read_a_to_b(remote_fd,client_fd)){
+          cout << " remote closed" << endl;
+          break;
+        }
       }
     }
-    // remote read
-    if(FD_ISSET(remote_fd,&rfds)){
-      cout << "[INFO] Data from " 
-           << dst_ip << ":" << dst_port << " to " 
-           << src_ip << ":" << src_port << ", ";
-      if(!read_a_to_b(remote_fd,client_fd)){
-        cout << " remote closed" << endl;
-        break;
-      }
-    }
-  }
 
+  }
+  else{
+    cout << "[INFO] SOCKS BIND Request" 
+         << " [User ID] \"" << socks_req.user_id
+         << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
+         << dst_ip << ":" << dst_port << endl;
+  }
 
   
   
