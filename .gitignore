@@ -1,0 +1,5 @@
+*.swp
+*.swo
+httpd
+hw4.cgi
+socks-server
