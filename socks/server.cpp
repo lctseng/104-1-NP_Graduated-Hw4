@@ -17,6 +17,7 @@
 
 #include "socks.hpp"
 #include "lib.hpp"
+#include "firewall.hpp"
 
 using std::string;
 using std::cout;
@@ -34,6 +35,8 @@ fd_set rfds,wfds;
 char buf[MAX_BUF_SIZE];
 
 int bind_port_num = BIND_PORT_BASE;
+FireWallRules firewall;
+
 
 // return value: whether to close connection
 bool read_a_to_b(int from_fd,int to_fd){
@@ -92,6 +95,20 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
          << " [User ID] \"" << socks_req.user_id
          << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
          << dst_ip << ":" << dst_port << endl;
+    // check firewall
+    if(!firewall.check_rule(socks_req.dst_ip)){
+      // denied
+      socks4_data socks_rep = socks_req;
+      socks_rep.vn = 0x0;
+      socks_rep.cd = CD_REJECTED;
+      socks_rep.write_to_fd(client_fd);
+      cout << "[INFO] SOCKS Request rejected " 
+           << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+           << dst_ip << ":" << dst_port << endl;
+      close(client_fd);
+      return;
+    }
+    
     // connect to remote
     // create socket and fill addr data
     int remote_fd = socket(AF_INET,SOCK_STREAM,0);

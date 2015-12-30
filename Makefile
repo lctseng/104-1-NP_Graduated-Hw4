@@ -26,7 +26,7 @@ httpd: http/httpd.cpp http/fdstream.hpp http/lib.hpp http/pipe.hpp
 	  rm -f httpd ;\
 	  echo "Please use g++ 5.0.0+ version" ;\
 	fi
-socks-server: socks/server.cpp socks/socks.hpp socks/lib.hpp socks/pipe.hpp socks/fdstream.hpp
+socks-server: socks/server.cpp socks/socks.hpp socks/lib.hpp socks/pipe.hpp socks/fdstream.hpp socks/firewall.hpp
 	@echo using `g++ --version | grep ^g++ `
 	@GCC_MAJOR=`g++ --version | grep ^g++ | sed 's/^.* //g' | awk -F. '{print $$1}'` ;\
 	GCC_MINOR=`g++ --version | grep ^g++ | sed 's/^.* //g' | awk -F. '{print $$2}'` ;\
