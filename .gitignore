@@ -1,5 +1,10 @@
+# Temp
 *.swp
 *.swo
+
+# Exec
 httpd
 hw4.cgi
 socks-server
+delay_test/delayread
+delay_test/delayserver
