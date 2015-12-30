@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include <sys/socket.h>
+#include <sys/types.h>   
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -13,7 +14,6 @@
 #define DEFAULT_PORT 18090
 #define MAX_BUF_SIZE 10240
 
-#define BIND_PORT_BASE 31234
 
 #include "socks.hpp"
 #include "lib.hpp"
@@ -34,7 +34,6 @@ fd_set ws;
 fd_set rfds,wfds;
 char buf[MAX_BUF_SIZE];
 
-int bind_port_num = BIND_PORT_BASE;
 FireWallRules firewall;
 
 
@@ -104,11 +103,6 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
     return;
   }
   if (socks_req.cd == CD_CONNECT){
-    cout << "[INFO] SOCKS CONNECT Request" 
-      << " [User ID] \"" << socks_req.user_id
-      << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
-      << dst_ip << ":" << dst_port << endl;
-
     // connect to remote
     // create socket and fill addr data
     int remote_fd = socket(AF_INET,SOCK_STREAM,0);
@@ -123,7 +117,7 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       socks_rep.vn = 0x0;
       socks_rep.cd = CD_REJECTED;
       socks_rep.write_to_fd(client_fd);
-      cout << "[INFO] SOCKS Request rejected(fail) " 
+      cout << "[INFO] SOCKS CONNECT Request rejected(fail) " 
         << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
         << dst_ip << ":" << dst_port << endl;
       close(client_fd);
@@ -134,7 +128,7 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
     socks_rep.vn = 0x0;
     socks_rep.cd = CD_GRANTED;
     socks_rep.write_to_fd(client_fd);
-    cout << "[INFO] SOCKS Request granted " 
+    cout << "[INFO] SOCKS CONNECT Request granted " 
       << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
       << dst_ip << ":" << dst_port << endl;
     // start ot relay
@@ -157,7 +151,7 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       }
       // client read
       if(FD_ISSET(client_fd,&rfds)){
-        cout << "[INFO] Data from " 
+        cout << "[INFO] [CONNECT] Data from " 
           << src_ip << ":" << src_port << " to " 
           << dst_ip << ":" << dst_port << ", ";
         if(!read_a_to_b(client_fd,remote_fd)){
@@ -167,7 +161,7 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       }
       // remote read
       if(FD_ISSET(remote_fd,&rfds)){
-        cout << "[INFO] Data from " 
+        cout << "[INFO] [CONNECT] Data from " 
           << dst_ip << ":" << dst_port << " to " 
           << src_ip << ":" << src_port << ", ";
         if(!read_a_to_b(remote_fd,client_fd)){
@@ -179,10 +173,120 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
 
   }
   else{
-    cout << "[INFO] SOCKS BIND Request" 
+    // bind a port
+    socklen_t new_remote_addr_len;
+    sockaddr_in new_remote_addr,serv_addr;
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(0);
+    int sockfd,remote_fd;
+    // socket
+    if((sockfd=socket(AF_INET,SOCK_STREAM,0))<0){
+      cout << "[ERROR] Cannot create server socket" << endl;
+      socks4_data socks_rep = socks_req;
+      socks_rep.vn = 0x0;
+      socks_rep.cd = CD_REJECTED;
+      socks_rep.write_to_fd(client_fd);
+      cout << "[INFO] SOCKS BIND Request rejected(socket fail) " 
+        << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+        << dst_ip << ":" << dst_port << endl;
+      close(client_fd);
+      return;
+    }
+    // bind
+    if(bind(sockfd,(sockaddr*)&serv_addr,sizeof(serv_addr))<0){
+      cout << "[ERROR] Cannot bind server port" << endl;
+      socks4_data socks_rep = socks_req;
+      socks_rep.vn = 0x0;
+      socks_rep.cd = CD_REJECTED;
+      socks_rep.write_to_fd(client_fd);
+      cout << "[INFO] SOCKS BIND Request rejected(bind fail) " 
+        << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+        << dst_ip << ":" << dst_port << endl;
+      close(client_fd);
+      close(sockfd);
+      return;
+    } 
+    uint16_t local_port = getsockport(sockfd);
+
+    // listen
+    listen(sockfd,0);
+    cout << "[INFO] SOCKS port binded: " << local_port << endl;
+    // reply first 
+    socks4_data socks_rep;
+    socks_rep.vn = 0x0;
+    socks_rep.cd = CD_GRANTED;
+    socks_rep.dst_ip = 0;
+    socks_rep.dst_port = htons(local_port);
+    socks_rep.write_to_fd(client_fd);
+    cout << "[INFO] SOCKS BIND Request granted" 
       << " [User ID] \"" << socks_req.user_id
       << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
       << dst_ip << ":" << dst_port << endl;
+    // accept
+    char new_dst_ip[20];
+    uint16_t new_dst_port;
+    new_remote_addr_len = sizeof(new_remote_addr);
+    remote_fd = accept(sockfd,(sockaddr*)&new_remote_addr,&new_remote_addr_len);
+    if(remote_fd<0){
+      cout << "[ERROR] Cannot accept from remote" << endl;
+      socks4_data socks_rep = socks_req;
+      socks_rep.vn = 0x0;
+      socks_rep.cd = CD_REJECTED;
+      socks_rep.dst_ip = 0;
+      socks_rep.dst_port = htons(local_port);
+      socks_rep.write_to_fd(client_fd);
+      cout << "[INFO] SOCKS BIND Request rejected(accept fail) " 
+        << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+        << dst_ip << ":" << dst_port << endl;
+      close(client_fd);
+      close(sockfd);
+      return;
+    }
+    strncpy(new_dst_ip,inet_ntoa(new_remote_addr.sin_addr),20);
+    new_dst_port = ntohs(new_remote_addr.sin_port);
+    // reply again
+    socks_rep.write_to_fd(client_fd);
+    // start relay traffic
+    // using select
+    // init fds
+    nfds = std::max(client_fd,remote_fd) + 1;
+    FD_ZERO(&rs);
+    FD_ZERO(&ws);
+    FD_SET(client_fd,&rs);
+    FD_SET(client_fd,&ws);
+    FD_SET(remote_fd,&rs);
+    FD_SET(remote_fd,&ws);
+    // select loop
+    while(true){
+      memcpy(&rfds,&rs,sizeof(rfds));
+      memcpy(&wfds,&ws,sizeof(wfds));
+      if((select(nfds,&rfds,&wfds,NULL,NULL))<0){
+        err_abort("Select Error!");
+      }
+      // client read
+      if(FD_ISSET(client_fd,&rfds)){
+        cout << "[INFO] [BIND] Data from " 
+          << src_ip << ":" << src_port << " to " 
+          << new_dst_ip << ":" << new_dst_port << ", ";
+        if(!read_a_to_b(client_fd,remote_fd)){
+          cout << " client closed" << endl;
+          break;
+        }
+      }
+      // remote read
+      if(FD_ISSET(remote_fd,&rfds)){
+        cout << "[INFO] [BIND] Data from " 
+          << new_dst_ip << ":" << new_dst_port << " to " 
+          << src_ip << ":" << src_port << ", ";
+        if(!read_a_to_b(remote_fd,client_fd)){
+          cout << " remote closed" << endl;
+          break;
+        }
+      }
+    }
+
   }
 
 
@@ -234,7 +338,6 @@ int main(int argc,char** argv){
     else if(pid>0){
       // parent
       close(clientfd);
-      bind_port_num++;
     }
     else{
       // child

@@ -151,4 +151,12 @@ void restore_sigchld(){
   signal(SIGCHLD,old_handler);
 }
 
+uint16_t getsockport(int sockfd){
+    struct sockaddr_in localAddress;
+    socklen_t addressLength = sizeof(localAddress);;
+    getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
+    return ntohs(localAddress.sin_port);
+}
+
+
 #endif
