@@ -54,7 +54,7 @@ bool read_a_to_b(int from_fd,int to_fd){
         // remote has data
         // send these data back to client if writable
         //if(FD_ISSET(from_fd,&wfds)){
-          write(to_fd,buf,read_n);
+        write(to_fd,buf,read_n);
         //}
       }
     }
@@ -90,25 +90,25 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
   in_addr_dst_ip.s_addr = socks_req.dst_ip;
   strncpy(dst_ip,inet_ntoa(in_addr_dst_ip),20);
   dst_port = ntohs(socks_req.dst_port);
+  // check firewall
+  if(!firewall.check_rule(socks_req.dst_ip)){
+    // denied
+    socks4_data socks_rep = socks_req;
+    socks_rep.vn = 0x0;
+    socks_rep.cd = CD_REJECTED;
+    socks_rep.write_to_fd(client_fd);
+    cout << "[INFO] SOCKS Request rejected(firewall) " 
+      << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+      << dst_ip << ":" << dst_port << endl;
+    close(client_fd);
+    return;
+  }
   if (socks_req.cd == CD_CONNECT){
     cout << "[INFO] SOCKS CONNECT Request" 
-         << " [User ID] \"" << socks_req.user_id
-         << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
-         << dst_ip << ":" << dst_port << endl;
-    // check firewall
-    if(!firewall.check_rule(socks_req.dst_ip)){
-      // denied
-      socks4_data socks_rep = socks_req;
-      socks_rep.vn = 0x0;
-      socks_rep.cd = CD_REJECTED;
-      socks_rep.write_to_fd(client_fd);
-      cout << "[INFO] SOCKS Request rejected(firewall) " 
-           << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
-           << dst_ip << ":" << dst_port << endl;
-      close(client_fd);
-      return;
-    }
-    
+      << " [User ID] \"" << socks_req.user_id
+      << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
+      << dst_ip << ":" << dst_port << endl;
+
     // connect to remote
     // create socket and fill addr data
     int remote_fd = socket(AF_INET,SOCK_STREAM,0);
@@ -124,8 +124,8 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       socks_rep.cd = CD_REJECTED;
       socks_rep.write_to_fd(client_fd);
       cout << "[INFO] SOCKS Request rejected(fail) " 
-           << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
-           << dst_ip << ":" << dst_port << endl;
+        << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+        << dst_ip << ":" << dst_port << endl;
       close(client_fd);
       return;
     }
@@ -135,8 +135,8 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
     socks_rep.cd = CD_GRANTED;
     socks_rep.write_to_fd(client_fd);
     cout << "[INFO] SOCKS Request granted " 
-         << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
-         << dst_ip << ":" << dst_port << endl;
+      << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+      << dst_ip << ":" << dst_port << endl;
     // start ot relay
     // using select
     // init fds
@@ -147,7 +147,7 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
     FD_SET(client_fd,&ws);
     FD_SET(remote_fd,&rs);
     FD_SET(remote_fd,&ws);
-    
+
     // select loop
     while(true){
       memcpy(&rfds,&rs,sizeof(rfds));
@@ -158,8 +158,8 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       // client read
       if(FD_ISSET(client_fd,&rfds)){
         cout << "[INFO] Data from " 
-             << src_ip << ":" << src_port << " to " 
-             << dst_ip << ":" << dst_port << ", ";
+          << src_ip << ":" << src_port << " to " 
+          << dst_ip << ":" << dst_port << ", ";
         if(!read_a_to_b(client_fd,remote_fd)){
           cout << " client closed" << endl;
           break;
@@ -168,8 +168,8 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       // remote read
       if(FD_ISSET(remote_fd,&rfds)){
         cout << "[INFO] Data from " 
-             << dst_ip << ":" << dst_port << " to " 
-             << src_ip << ":" << src_port << ", ";
+          << dst_ip << ":" << dst_port << " to " 
+          << src_ip << ":" << src_port << ", ";
         if(!read_a_to_b(remote_fd,client_fd)){
           cout << " remote closed" << endl;
           break;
@@ -180,13 +180,13 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
   }
   else{
     cout << "[INFO] SOCKS BIND Request" 
-         << " [User ID] \"" << socks_req.user_id
-         << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
-         << dst_ip << ":" << dst_port << endl;
+      << " [User ID] \"" << socks_req.user_id
+      << "\" [Src] " << src_ip << ":" << src_port << " [Dst] " 
+      << dst_ip << ":" << dst_port << endl;
   }
 
-  
-  
+
+
 }
 
 
@@ -205,7 +205,7 @@ int main(int argc,char** argv){
   socklen_t cli_addr_len;
   sockaddr_in cli_addr,serv_addr;
   pid_t pid;
-  
+
   // socket
   if((sockfd=socket(AF_INET,SOCK_STREAM,0))<0){
     err_abort("can't create server socket");
@@ -244,7 +244,7 @@ int main(int argc,char** argv){
       exit(0);
     }
   }
-  
+
 
   return 0;
 }
