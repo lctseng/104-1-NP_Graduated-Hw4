@@ -102,7 +102,7 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
       socks_rep.vn = 0x0;
       socks_rep.cd = CD_REJECTED;
       socks_rep.write_to_fd(client_fd);
-      cout << "[INFO] SOCKS Request rejected " 
+      cout << "[INFO] SOCKS Request rejected(firewall) " 
            << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
            << dst_ip << ":" << dst_port << endl;
       close(client_fd);
@@ -118,7 +118,16 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
     remote_addr.sin_port = socks_req.dst_port;
     // connect remote
     if(connect(remote_fd,(struct sockaddr *)&remote_addr,sizeof(remote_addr)) == -1) {
-      err_abort("Sock Connect Error");
+      cout << "[ERROR] Remote socket connection error" << endl;
+      socks4_data socks_rep = socks_req;
+      socks_rep.vn = 0x0;
+      socks_rep.cd = CD_REJECTED;
+      socks_rep.write_to_fd(client_fd);
+      cout << "[INFO] SOCKS Request rejected(fail) " 
+           << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+           << dst_ip << ":" << dst_port << endl;
+      close(client_fd);
+      return;
     }
     // reply to client: socks ready
     socks4_data socks_rep = socks_req;
