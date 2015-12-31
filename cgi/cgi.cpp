@@ -42,9 +42,9 @@ void print_footer(){
 void parse_batch_info(){
     string remain = getenv("QUERY_STRING");
     smatch match; 
-    while(regex_search(remain,match,regex("h\\d+=([a-zA-Z0-9.-]*)&p\\d+=([a-zA-Z0-9.-]*)&f\\d+=([a-zA-Z0-9.-]*)&?"))){
+    while(regex_search(remain,match,regex("h\\d+=([a-zA-Z0-9.-]*)&p\\d+=([a-zA-Z0-9.-]*)&f\\d+=([a-zA-Z0-9.-]*)&sh\\d+=([a-zA-Z0-9.-]*)&sp\\d+=([a-zA-Z0-9.-]*)&?"))){
       if(!string(match[1]).empty()){
-        batch_list.emplace_back(match[1],stoi(match[2]),match[3]);
+        batch_list.emplace_back(match[1],stoi(match[2]),match[3],match[4],stoi(match[5]));
       }
       remain = match.suffix();
     }

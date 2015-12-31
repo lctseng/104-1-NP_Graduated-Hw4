@@ -1,5 +1,5 @@
 all: hw4.cgi httpd socks-server
-hw4.cgi: cgi/cgi.cpp cgi/fdstream.hpp cgi/lib.hpp cgi/pipe.hpp cgi/nonblock_client.hpp
+hw4.cgi: cgi/cgi.cpp cgi/fdstream.hpp cgi/lib.hpp cgi/pipe.hpp cgi/nonblock_client.hpp cgi/socks.hpp
 	@echo using `g++ --version | grep ^g++ `
 	@GCC_MAJOR=`g++ --version | grep ^g++ | sed 's/^.* //g' | awk -F. '{print $$1}'` ;\
 	GCC_MINOR=`g++ --version | grep ^g++ | sed 's/^.* //g' | awk -F. '{print $$2}'` ;\

@@ -6,6 +6,7 @@
 #include <regex>
 
 #include "lib.hpp"
+#include "socks.hpp"
 
 
 #include <sys/socket.h>
@@ -15,9 +16,10 @@
 #include <fcntl.h>
 
 #define S_CONNECT 0
-#define S_READ 1
-#define S_WRITE 2
-#define S_DONE 3
+#define S_WAIT_SOCKS 1
+#define S_READ 2
+#define S_WRITE 3
+#define S_DONE 4
 
 #define MAX_BUF_SIZE 16000
 
@@ -51,8 +53,10 @@ struct BatchInfo{
   string hostname;
   int port;
   string filename;
-  BatchInfo(const string& host,int port,const string& filename)
-    :hostname(host),port(port),filename(filename)
+  string sock_host;
+  int sock_port;
+  BatchInfo(const string& host,int port,const string& filename,const string& sock_host,int sock_port)
+    :hostname(host),port(port),filename(filename),sock_host(sock_host),sock_port(sock_port)
   {}
 };
 
@@ -72,20 +76,25 @@ public:
   }
   void connect_server(){
     if((peer_host=gethostbyname(info.hostname.c_str())) == NULL) {
-      err_abort("Find entry error");
+      err_abort("Find remote hostname error");
+    }
+    if((sock_host=gethostbyname(info.sock_host.c_str())) == NULL) {
+      err_abort("Find socks hostname error");
     }
 
+
+    // create connection to sock 
     fd = socket(AF_INET,SOCK_STREAM,0);
-    memset(&peer_addr, 0, sizeof(peer_addr)); 
-    peer_addr.sin_family = AF_INET;
-    peer_addr.sin_addr = *((struct in_addr *)peer_host->h_addr); 
-    peer_addr.sin_port = htons(info.port);
+    memset(&sock_addr, 0, sizeof(sock_addr)); 
+    sock_addr.sin_family = AF_INET;
+    sock_addr.sin_addr = *((struct in_addr *)sock_host->h_addr); 
+    sock_addr.sin_port = htons(info.sock_port);
 
     int flag = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flag | O_NONBLOCK);
-    if ( connect(fd,(struct sockaddr *)&peer_addr,sizeof(peer_addr)) < 0) {
+    if ( connect(fd,(struct sockaddr *)&sock_addr,sizeof(sock_addr)) < 0) {
       if (errno != EINPROGRESS){
-        err_abort("Connect error");
+        err_abort("Connect socks error");
       };
     }
 
@@ -127,7 +136,9 @@ public:
   int fd;
   stringstream ss;
   sockaddr_in  peer_addr;
+  sockaddr_in  sock_addr;
   hostent      *peer_host;
+  hostent      *sock_host;
   ifdstream *pfin;
   ofdstream *pfout;
   ifstream fin;
@@ -178,8 +189,38 @@ public:
               cout << client.info.port << ";";
               err_abort("Nonblock connect error!");
             } 
-            //cout << "Connected: " << client.info.port << endl;
-            client.state = S_READ;
+            //cout << "Sock connected: " << client.info.sock_port << endl;
+            // SOCKS connected
+            // send reqest
+            socks4_data socks_req;
+            socks_req.vn = 4;
+            socks_req.cd = CD_CONNECT;
+            socks_req.dst_port = htons(client.info.port); 
+            socks_req.dst_ip = ((struct in_addr *)client.sock_host->h_addr)->s_addr;
+            socks_req.write_to_fd(client.fd,true); // with user id
+            client.state = S_WAIT_SOCKS;
+          }
+          break;
+        case S_WAIT_SOCKS:
+          if(FD_ISSET(client.fd,&rfds)){
+            // read request from sock
+            socks4_data socks_rep;
+            if(socks_rep.read_from_fd(client.fd,false)){ // no read id
+              // check for cd
+              if(socks_rep.cd == CD_GRANTED){
+                // every thing is ready!
+                client.state = S_READ;
+              }
+              else{
+                // failure!
+                err_abort("Socks access error! Request rejected!");
+              }
+            }
+            else{
+              // failure!
+              err_abort("Socks access error! Server terminated!");
+            }
+
           }
           break;
         case S_READ:
