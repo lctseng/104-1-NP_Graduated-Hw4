@@ -34,7 +34,8 @@ fd_set ws;
 fd_set rfds,wfds;
 char buf[MAX_BUF_SIZE];
 
-FireWallRules firewall;
+FireWallRules firewall("socks.conf");
+FireWallRules src_firewall("socks_src.conf");
 
 
 // return value: whether to close connection
@@ -89,14 +90,27 @@ void process_client(sockaddr_in* p_client_addr,int client_fd){
   in_addr_dst_ip.s_addr = socks_req.dst_ip;
   strncpy(dst_ip,inet_ntoa(in_addr_dst_ip),20);
   dst_port = ntohs(socks_req.dst_port);
-  // check firewall
+  // check firewall(dst)
   if(!firewall.check_rule(socks_req.dst_ip)){
     // denied
     socks4_data socks_rep = socks_req;
     socks_rep.vn = 0x0;
     socks_rep.cd = CD_REJECTED;
     socks_rep.write_to_fd(client_fd);
-    cout << "[INFO] SOCKS Request rejected(firewall) " 
+    cout << "[INFO] SOCKS Request rejected(dst firewall) " 
+      << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
+      << dst_ip << ":" << dst_port << endl;
+    close(client_fd);
+    return;
+  }
+  // check firewall(src)
+  if(!src_firewall.check_rule(p_client_addr->sin_addr.s_addr)){
+    // denied
+    socks4_data socks_rep = socks_req;
+    socks_rep.vn = 0x0;
+    socks_rep.cd = CD_REJECTED;
+    socks_rep.write_to_fd(client_fd);
+    cout << "[INFO] SOCKS Request rejected(src firewall) " 
       << "[Src] " << src_ip << ":" << src_port << " [Dst] " 
       << dst_ip << ":" << dst_port << endl;
     close(client_fd);

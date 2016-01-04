@@ -83,8 +83,8 @@ public:
 
 class FireWallRules{
 public:
-  FireWallRules(){
-    ifstream fin("socks.conf");
+  FireWallRules(const string& filename){
+    ifstream fin(filename);
     if(fin.is_open()){
       string raw;
       while(getline(fin,raw)){
